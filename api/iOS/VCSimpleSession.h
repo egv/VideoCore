@@ -153,4 +153,14 @@ typedef NS_ENUM(NSInteger, VCFilter) {
 - (void) addPixelBufferSource: (UIImage*) image
                      withRect: (CGRect) rect;
 
+#pragma mark - Custom
+
+- (void)correctWidth:(CGFloat *)width andHeight:(CGFloat *)height;
+- (CGFloat)nearestDigitForDivision:(CGFloat)targetDigit andDenominator:(NSInteger)denominator;
+
+- (void)reorientCamera;
+- (void)changePreviewSize:(CGSize)size;
+
+- (UIImage * _Nonnull)getStaticPreview;
+
 @end

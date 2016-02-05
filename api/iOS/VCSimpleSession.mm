@@ -145,6 +145,8 @@ namespace videocore { namespace simpleApi {
     CGPoint _exposurePOI;
     
     VCFilter _filter;
+    
+    CVPixelBufferRef pixelBufferRef;
 }
 @property (nonatomic, readwrite) VCSessionState rtmpSessionState;
 
@@ -264,6 +266,19 @@ namespace videocore { namespace simpleApi {
 - (void) setRtmpSessionState:(VCSessionState)rtmpSessionState
 {
     _rtmpSessionState = rtmpSessionState;
+    
+    BOOL shouldNotBlockScreen = NO;
+    switch (_rtmpSessionState) {
+        case VCSessionStateStarted:
+            shouldNotBlockScreen = YES;
+            break;
+            
+        default:
+            shouldNotBlockScreen = NO;
+            break;
+    }
+    [[UIApplication sharedApplication] setIdleTimerDisabled: shouldNotBlockScreen];
+    
     if (NSOperationQueue.currentQueue != NSOperationQueue.mainQueue) {
         dispatch_async(dispatch_get_main_queue(), ^{
             // trigger in main thread, avoid autolayout engine exception
@@ -296,6 +311,15 @@ namespace videocore { namespace simpleApi {
         // multiplication that is already happening once per frame.
         m_positionTransform->setSize(self.videoSize.width * videoZoomFactor,
                                      self.videoSize.height * videoZoomFactor);
+        
+        AVCaptureVideoPreviewLayer *layer = nil;
+        [self getCameraPreviewLayer:&layer];
+        if (layer) {
+            layer.transform = CATransform3DMakeScale(videoZoomFactor, videoZoomFactor, 1.0);
+//            CGRect rect = layer.frame;
+//            rect.size = CGSizeMake((CGRectGetWidth(rect) * self.videoZoomFactor), (CGRectGetHeight(rect) * self.videoZoomFactor));
+//            layer.frame = rect;
+        }
     }
 }
 - (void) setAudioChannelCount:(int)channelCount
@@ -473,11 +497,17 @@ namespace videocore { namespace simpleApi {
                         aspectMode:(VCAspectMode)aspectMode
 {
     self.bitrate = bps;
+    
+    CGFloat width = videoSize.width;
+    CGFloat height = videoSize.height;
+    [self correctWidth: &width andHeight: &height];
+    videoSize = CGSizeMake(width, height);
     self.videoSize = videoSize;
+    
     self.fps = fps;
     _useInterfaceOrientation = useInterfaceOrientation;
     self.micGain = 1.f;
-    self.audioChannelCount = 2;
+    self.audioChannelCount = 1;
     self.audioSampleRate = 44100.;
     self.useAdaptiveBitrate = NO;
     self.aspectMode = aspectMode;
@@ -602,7 +632,7 @@ namespace videocore { namespace simpleApi {
 
                                                       videoBr = video->bitrate();
 
-                                                      if (audio) {
+                                                      if (NO) {//(audio) {
 
                                                           if ( videoBr > 500000 ) {
                                                               audio->setBitrate(128000);
@@ -738,11 +768,11 @@ namespace videocore { namespace simpleApi {
         auto videoSplit = std::make_shared<videocore::Split>();
 
         m_videoSplit = videoSplit;
-        VCPreviewView* preview = (VCPreviewView*)self.previewView;
-
+//        VCPreviewView* preview = (VCPreviewView*)self.previewView;
+//
         m_pbOutput = std::make_shared<videocore::simpleApi::PixelBufferOutput>([=](const void* const data, size_t size){
-            CVPixelBufferRef ref = (CVPixelBufferRef)data;
-            [preview drawFrame:ref];
+            self->pixelBufferRef = (CVPixelBufferRef)data;
+//            [preview drawFrame:ref];
             if(self.rtmpSessionState == VCSessionStateNone) {
                 self.rtmpSessionState = VCSessionStatePreviewStarted;
             }
@@ -905,4 +935,76 @@ namespace videocore { namespace simpleApi {
     NSString *basePath = ([paths count] > 0) ? [paths objectAtIndex:0] : nil;
     return basePath;
 }
+
+#pragma mark - Custom methods
+#pragma mark - Helpers
+
+- (void)correctWidth:(CGFloat *)width andHeight:(CGFloat *)height;
+{
+    NSInteger denominator = 8;
+    *width = [self nearestDigitForDivision:*width andDenominator:denominator];
+    *height = [self nearestDigitForDivision:*height andDenominator:denominator];
+}
+
+- (CGFloat)nearestDigitForDivision:(CGFloat)targetDigit andDenominator:(NSInteger)denominator;
+{
+    NSInteger tmp, result = targetDigit;
+    if ((tmp = result % denominator) != 0) {
+        result += result > -1 ? (denominator - tmp) : -tmp;
+    }
+    
+    return result;
+}
+
+- (void)reorientCamera
+{
+    m_cameraSource->reorientCamera();
+}
+
+- (void)changePreviewSize:(CGSize)size
+{
+    [self reorientCamera];
+    
+    AVCaptureVideoPreviewLayer *layer = nil;
+    [self getCameraPreviewLayer:&layer];
+    if (layer) {
+        BOOL transformChanged = NO;
+        CATransform3D transform = CATransform3DIdentity;
+        if (!CATransform3DEqualToTransform(layer.transform, transform)) {
+            transformChanged = YES;
+            transform = layer.transform;
+            layer.transform = CATransform3DIdentity;
+        }
+        
+        CGRect rect = layer.frame;
+        rect.size = size;
+        layer.frame = rect;
+        
+        if (transformChanged) {
+            layer.transform = transform;
+        }
+    }
+}
+
+- (UIImage * _Nonnull)getStaticPreview
+{
+    CVPixelBufferRef pixelBuffer = self->pixelBufferRef;
+    
+    CIImage *ciImage = [CIImage imageWithCVPixelBuffer:pixelBuffer];
+    
+    CIContext *temporaryContext = [CIContext contextWithOptions:nil];
+    CGImageRef videoImage = [temporaryContext
+                             createCGImage:ciImage
+                             fromRect:CGRectMake(0, 0,
+                                                 CVPixelBufferGetWidth(pixelBuffer),
+                                                 CVPixelBufferGetHeight(pixelBuffer))];
+    
+    UIImage *uiImage = [UIImage imageWithCGImage:videoImage];
+    CGImageRelease(videoImage);
+    
+    return uiImage;
+}
+
+#pragma mark -
+
 @end

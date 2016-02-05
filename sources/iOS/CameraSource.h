@@ -122,6 +122,8 @@ namespace videocore { namespace iOS {
         /*! Used by Objective-C Device/Interface Orientation Notifications */
         void reorientCamera();
         
+        void* m_previewLayer;
+        
     private:
         
         /*! 
@@ -143,7 +145,6 @@ namespace videocore { namespace iOS {
         void* m_captureSession;
         void* m_captureDevice;
         void* m_callbackSession;
-        void* m_previewLayer;
         
         int  m_fps;
         bool m_torchOn;

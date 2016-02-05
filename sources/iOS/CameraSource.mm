@@ -69,6 +69,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         });
     }
 }
+
 @end
 namespace videocore { namespace iOS {
     
@@ -176,14 +177,14 @@ namespace videocore { namespace iOS {
                     
                     [session startRunning];
                     
-                    if(!bThis->m_orientationLocked) {
-                        if(bThis->m_useInterfaceOrientation) {
-                            [[NSNotificationCenter defaultCenter] addObserver:((id)bThis->m_callbackSession) selector:@selector(orientationChanged:) name:UIApplicationDidChangeStatusBarOrientationNotification object:nil];
-                        } else {
-                            [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
-                            [[NSNotificationCenter defaultCenter] addObserver:((id)bThis->m_callbackSession) selector:@selector(orientationChanged:) name:UIDeviceOrientationDidChangeNotification object:nil];
-                        }
-                    }
+//                    if(!bThis->m_orientationLocked) {
+//                        if(bThis->m_useInterfaceOrientation) {
+//                            [[NSNotificationCenter defaultCenter] addObserver:((id)bThis->m_callbackSession) selector:@selector(orientationChanged:) name:UIApplicationDidChangeStatusBarOrientationNotification object:nil];
+//                        } else {
+//                            [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
+//                            [[NSNotificationCenter defaultCenter] addObserver:((id)bThis->m_callbackSession) selector:@selector(orientationChanged:) name:UIDeviceOrientationDidChangeNotification object:nil];
+//                        }
+//                    }
                     [output release];
                 }
                 if (callbackBlock) {
@@ -340,44 +341,37 @@ namespace videocore { namespace iOS {
         AVCaptureSession* session = (AVCaptureSession*)m_captureSession;
         // [session beginConfiguration];
         
-        for (AVCaptureVideoDataOutput* output in session.outputs) {
-            for (AVCaptureConnection * av in output.connections) {
-                
-                switch (orientation) {
-                        // UIInterfaceOrientationPortraitUpsideDown, UIDeviceOrientationPortraitUpsideDown
-                    case UIInterfaceOrientationPortraitUpsideDown:
-                        if(av.videoOrientation != AVCaptureVideoOrientationPortraitUpsideDown) {
-                            av.videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
-                        //    reorient = true;
-                        }
-                        break;
-                        // UIInterfaceOrientationLandscapeRight, UIDeviceOrientationLandscapeLeft
-                    case UIInterfaceOrientationLandscapeRight:
-                        if(av.videoOrientation != AVCaptureVideoOrientationLandscapeRight) {
-                            av.videoOrientation = AVCaptureVideoOrientationLandscapeRight;
-                        //    reorient = true;
-                        }
-                        break;
-                        // UIInterfaceOrientationLandscapeLeft, UIDeviceOrientationLandscapeRight
-                    case UIInterfaceOrientationLandscapeLeft:
-                        if(av.videoOrientation != AVCaptureVideoOrientationLandscapeLeft) {
-                            av.videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
-                         //   reorient = true;
-                        }
-                        break;
-                        // UIInterfaceOrientationPortrait, UIDeviceOrientationPortrait
-                    case UIInterfaceOrientationPortrait:
-                        if(av.videoOrientation != AVCaptureVideoOrientationPortrait) {
-                            av.videoOrientation = AVCaptureVideoOrientationPortrait;
-                        //    reorient = true;
-                        }
-                        break;
-                    default:
-                        break;
-                }
+        AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)m_previewLayer;
+        AVCaptureVideoOrientation videoOrientation = AVCaptureVideoOrientationPortrait;
+        
+        AVCaptureVideoDataOutput *output = [session.outputs firstObject];
+        if (output) {
+            [[output connectionWithMediaType: AVMediaTypeVideo] setVideoOrientation: AVCaptureVideoOrientationPortrait];
+            
+            switch (orientation) {
+                case UIInterfaceOrientationPortraitUpsideDown:
+                    videoOrientation = AVCaptureVideoOrientationPortrait;
+                    break;
+                    
+                case UIInterfaceOrientationLandscapeRight:
+                    videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+                    break;
+                    
+                case UIInterfaceOrientationLandscapeLeft:
+                    videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+                    break;
+                    
+                case UIInterfaceOrientationPortrait:
+                    videoOrientation = AVCaptureVideoOrientationPortrait;
+                    break;
+                    
+                default:
+                    break;
             }
+            
+            [[previewLayer connection] setVideoOrientation: videoOrientation];
         }
-
+        
         //[session commitConfiguration];
         if(m_torchOn) {
             setTorch(m_torchOn);
